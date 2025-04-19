@@ -1,8 +1,12 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using _Project.Scripts.Shared;
 using _Project.Scripts.Shared.Sessions.Data;
 using _Project.Scripts.Shared.Sessions.Events;
+using _Project.Scripts.Shared.TeamSelection.Events;
+using Newtonsoft.Json;
 using Unity.Netcode;
 using Unity.Services.Authentication;
 using Unity.Services.Core;
@@ -11,6 +15,7 @@ using Unity.Services.Lobbies.Models;
 using Unity.Services.Relay;
 using Unity.Services.Relay.Models;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace _Project.Scripts.Network
 {
@@ -18,6 +23,8 @@ namespace _Project.Scripts.Network
     {
         private Lobby _activeLobby;
         private string _relayJoinCode;
+        private Coroutine _heartbeatCoroutine;
+        public static SessionManager instance;
 
         public Lobby ActiveLobby {
             get => _activeLobby;
@@ -35,20 +42,34 @@ namespace _Project.Scripts.Network
         [SerializeField] private SessionRefreshRequestedEvent refreshRequestedEvent;
         [SerializeField] private SessionListUpdatedEvent sessionListUpdatedEvent;
         [SerializeField] private SessionStartedEvent sessionStartedEvent;
+        [SerializeField] private TeamsReadyEvent teamsReadyEvent;
 
         private const string PlayerNameKey = "playerName";
         private const string RelayJoinCodeKey = "RelayJoinCode";
+
+        private void Awake()
+        {
+            instance = this;
+        }
+
+        private void Start()
+        {
+            NetworkManager.Singleton.ConnectionApprovalCallback = ApprovalCheck;
+        }
 
         private void OnEnable() {
             createRequestedEvent.Register(HandleCreateSession);
             joinRequestedEvent.Register(HandleJoinSession);
             refreshRequestedEvent.Register(HandleRefreshSessions);
+            teamsReadyEvent.Register(OnTeamsReady);
         }
 
         private void OnDisable() {
             createRequestedEvent.Unregister(HandleCreateSession);
             joinRequestedEvent.Unregister(HandleJoinSession);
             refreshRequestedEvent.Unregister(HandleRefreshSessions);
+            teamsReadyEvent.Unregister(OnTeamsReady);
+            StopLobbyHeartbeat();
         }
 
         private async void HandleCreateSession(string sessionName) {
@@ -80,6 +101,8 @@ namespace _Project.Scripts.Network
 
                 ActiveLobby = await Lobbies.Instance.CreateLobbyAsync(lobbyName, 4, options);
                 Debug.Log($"Lobby created! Lobby ID: {ActiveLobby.Id}, Relay Join Code: {_relayJoinCode}");
+
+                StartLobbyHeartbeat();
 
                 var unityTransport = NetworkManager.Singleton.GetComponent<Unity.Netcode.Transports.UTP.UnityTransport>();
                 unityTransport.SetHostRelayData(allocation.RelayServer.IpV4, (ushort)allocation.RelayServer.Port, allocation.AllocationIdBytes, allocation.Key, allocation.ConnectionData);
@@ -132,6 +155,8 @@ namespace _Project.Scripts.Network
         }
 
         public async Task LeaveLobby() {
+            StopLobbyHeartbeat();
+
             if (ActiveLobby != null) {
                 try {
                     await Lobbies.Instance.RemovePlayerAsync(ActiveLobby.Id, AuthenticationService.Instance.PlayerId);
@@ -144,5 +169,73 @@ namespace _Project.Scripts.Network
                 }
             }
         }
+
+        private void StartLobbyHeartbeat() {
+            if (_heartbeatCoroutine != null)
+                StopCoroutine(_heartbeatCoroutine);
+
+            _heartbeatCoroutine = StartCoroutine(LobbyHeartbeatCoroutine());
+        }
+
+        private void StopLobbyHeartbeat() {
+            if (_heartbeatCoroutine != null) {
+                StopCoroutine(_heartbeatCoroutine);
+                _heartbeatCoroutine = null;
+            }
+        }
+
+        private IEnumerator LobbyHeartbeatCoroutine() {
+            var wait = new WaitForSeconds(15f);
+
+            while (ActiveLobby != null) {
+                yield return wait;
+
+                try {
+                    Lobbies.Instance.SendHeartbeatPingAsync(ActiveLobby.Id);
+                    Debug.Log($"Heartbeat sent for Lobby: {ActiveLobby.Id}");
+                }
+                catch (Exception e) {
+                    Debug.LogWarning($"Heartbeat failed: {e}");
+                }
+            }
+        }
+
+        private async void OnTeamsReady(List<List<PlayerNetworkData>> teams) {
+            
+            if (_activeLobby == null) 
+                return;
+
+            var lobbyData = _activeLobby.Data;
+            var settings = new JsonSerializerSettings();
+            settings.Converters.Add(new FixedString64BytesConverter());
+            lobbyData["TeamsData"] = new DataObject(DataObject.VisibilityOptions.Member, JsonConvert.SerializeObject(teams, settings));
+
+            await Lobbies.Instance.UpdateLobbyAsync(_activeLobby.Id, new UpdateLobbyOptions {
+                Data = lobbyData
+            });
+            
+            Debug.Log("Lobby Data Updated");
+            NetworkManager.Singleton.SceneManager.LoadScene("GameScene", LoadSceneMode.Single);
+
+        }
+        
+        private async Task UpdateLobby()
+        {
+            _activeLobby = await Lobbies.Instance.GetLobbyAsync(ActiveLobby.Id);
+        }
+
+        public async Task<Dictionary<string, DataObject>> GetLobbyData()
+        {
+            await UpdateLobby();
+            return _activeLobby?.Data;
+        }
+        
+        private void ApprovalCheck(NetworkManager.ConnectionApprovalRequest request, NetworkManager.ConnectionApprovalResponse response)
+        {
+            response.Approved = true;
+            response.CreatePlayerObject = false;  // Don't auto-spawn!
+        }
+        
+        
     }
 }

@@ -1,54 +1,97 @@
-using System;
+using System.Collections.Generic;
+using System.Linq;
 using _Project.Scripts.Shared;
+using _Project.Scripts.Shared.Sessions.Events;
+using _Project.Scripts.Shared.TeamSelection.Events;
+using Unity.Collections;
 using Unity.Netcode;
+using Unity.Services.Authentication;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace _Project.Scripts.Network
 {
     public class TeamSelectionSync : NetworkBehaviour
     {
-        private readonly NetworkList<PlayerNetworkData> _team1 = new NetworkList<PlayerNetworkData>();
-        private readonly NetworkList<PlayerNetworkData> _team2 = new NetworkList<PlayerNetworkData>();
+        [Header("Events")] 
+        [SerializeField] private TeamSelectedEvent teamSelectedEvent;
+        [SerializeField] private TeamsChangedEvent teamsChangedEvent;
+        [SerializeField] private TeamsReadyEvent teamsReadyEvent;
+        
+        
+        private readonly List<List<PlayerNetworkData>> _teams = new(){ new List<PlayerNetworkData>(), new List<PlayerNetworkData>()};
 
         public override void OnNetworkSpawn()
         {
-            _team1.OnListChanged += OnTeamsChanged;
-            _team2.OnListChanged += OnTeamsChanged;
+            teamSelectedEvent.Register(OnTeamSelected);
+            if (!IsServer) 
+                return;
+            NetworkManager.Singleton.OnClientConnectedCallback += OnClientConnectedCallback;
         }
+        
 
         public override void OnNetworkDespawn()
         {
-            _team1.OnListChanged -= OnTeamsChanged;
-            _team2.OnListChanged -= OnTeamsChanged;
+            teamSelectedEvent.Unregister(OnTeamSelected);
+            if (IsServer)
+                NetworkManager.Singleton.OnClientConnectedCallback -= OnClientConnectedCallback;
+        }
+        
+        private void OnClientConnectedCallback(ulong clientId)
+        {
+            OnTeamsChangedClientRpc(_teams[0].ToArray(), _teams[1].ToArray());
         }
         
 
         private void OnTeamsChanged(NetworkListEvent<PlayerNetworkData> eventData)
         {
-            Debug.Log("Team 1");
-            foreach (var player in _team1)
+            teamsChangedEvent?.Raise(_teams[0], _teams[1]);
+        }
+        
+        
+        private void OnTeamSelected(int index)
+        {
+            if (index == -1 && IsServer)
             {
-                Debug.Log(player.Name);
+                OnTeamsChangedClientRpc(_teams[0].ToArray(), _teams[1].ToArray());
+                return;
             }
-            Debug.Log("Team 2");
-            foreach (var player in _team2)
-            {
-                Debug.Log(player.Name);
-            }
+            var playerData = new PlayerNetworkData(AuthenticationService.Instance.PlayerId, NetworkManager.Singleton.LocalClientId, index, new FixedString64Bytes($"Player{NetworkManager.Singleton.LocalClientId}"));
+            UpdateTeamsServerRpc(playerData, index);
         }
 
+
         [ServerRpc(RequireOwnership = false)]
-        public void ChooseTeamServerRpc(PlayerNetworkData player, int teamIndex)
+        private void UpdateTeamsServerRpc(PlayerNetworkData player, int teamIndex)
         {
-            if (teamIndex == 1)
+            teamIndex -= 1;
+            if (_teams[teamIndex].Contains(player) || _teams[teamIndex].Count == 2)
             {
-                _team2.Remove(player);
-                _team1.Add(player);
+                return;
             }
-            else
+
+            foreach (var team in _teams)
             {
-                _team1.Remove(player);
-                _team2.Add(player);
+                team.Remove(player);
+            }
+            
+            _teams[teamIndex].Add(player);
+            OnTeamsChangedClientRpc(_teams[0].ToArray(), _teams[1].ToArray());
+            CheckForTeamsCompleteness();
+        }
+
+        [ClientRpc(RequireOwnership = false)]
+        private void OnTeamsChangedClientRpc(PlayerNetworkData[] team1, PlayerNetworkData[] team2)
+        {
+            teamsChangedEvent?.Raise(team1.ToList(), team2.ToList());
+        }
+
+        private void CheckForTeamsCompleteness()
+        {
+            Debug.Log("Checking For Teams");
+            if (_teams[0].Count == 1 && _teams[1].Count == 1)
+            {
+                teamsReadyEvent?.Raise(_teams);
             }
         }
     }

@@ -388,6 +388,7 @@ GameObject:
   - component: {fileID: 222346514}
   - component: {fileID: 222346516}
   - component: {fileID: 222346515}
+  - component: {fileID: 222346517}
   m_Layer: 5
   m_Name: ChoosingTeamPanel
   m_TagString: Untagged
@@ -455,6 +456,22 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 222346513}
   m_CullTransparentMesh: 1
+--- !u!114 &222346517
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 222346513}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e1ab974c746041841a72d55f4bd35b1e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  team1View: {fileID: 7288430300179512936}
+  team2View: {fileID: 1496059685}
+  teamSelectedEvent: {fileID: 11400000, guid: 4db83e1b9f33fda4ebf32fe68ef7223c, type: 2}
+  teamsChangedEvent: {fileID: 11400000, guid: 576e5995b6c5d5c4287b5d9a1e6d1b60, type: 2}
 --- !u!224 &266858003 stripped
 RectTransform:
   m_CorrespondingSourceObject: {fileID: 3662602394998553282, guid: 7f34983afe31f854b9fc62a8da457172,
@@ -2272,6 +2289,18 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 7f34983afe31f854b9fc62a8da457172, type: 3}
+--- !u!114 &1496059685 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 1380478662796371011, guid: 7f34983afe31f854b9fc62a8da457172,
+    type: 3}
+  m_PrefabInstance: {fileID: 1496059684}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 00840b47b6411324ab4bdf83645dad6a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &1591122661
 GameObject:
   m_ObjectHideFlags: 0
@@ -3668,6 +3697,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 67e842002f4f5df448a4a541862b04d4, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  teamSelectedEvent: {fileID: 11400000, guid: 4db83e1b9f33fda4ebf32fe68ef7223c, type: 2}
+  teamsChangedEvent: {fileID: 11400000, guid: 576e5995b6c5d5c4287b5d9a1e6d1b60, type: 2}
+  teamsReadyEvent: {fileID: 11400000, guid: c710b2f0c5906774c96c4bd89a92f98d, type: 2}
 --- !u!1 &4776109371083929013
 GameObject:
   m_ObjectHideFlags: 0
@@ -4028,6 +4060,18 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 7f34983afe31f854b9fc62a8da457172, type: 3}
+--- !u!114 &7288430300179512936 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 1380478662796371011, guid: 7f34983afe31f854b9fc62a8da457172,
+    type: 3}
+  m_PrefabInstance: {fileID: 7288430300179512935}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 00840b47b6411324ab4bdf83645dad6a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!224 &8584324776222189942
 RectTransform:
   m_ObjectHideFlags: 0

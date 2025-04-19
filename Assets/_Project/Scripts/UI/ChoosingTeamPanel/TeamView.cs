@@ -10,13 +10,17 @@ namespace _Project.Scripts.UI.ChoosingTeamPanel
 {
     public class TeamView : MonoBehaviour
     {
+        [Header("References")]
         [SerializeField] private Transform contentParent;
         [SerializeField] private PlayerTeamView playerTeamViewPrefab;
         [SerializeField] private List<PlayerTeamView> playerTeamViews;
         [SerializeField] private Button chooseTeamButton;
+        [SerializeField] private Button startGameButton;
+        
+        [Header("Data")]
         [SerializeField] private int index;
         
-        public static event Action<int> TeamSelected;
+        public event Action<int> TeamSelected;
 
         private void Awake()
         {
@@ -24,7 +28,7 @@ namespace _Project.Scripts.UI.ChoosingTeamPanel
         }
         
 
-        public void Init(List<PlayerData> players, string localPlayerId)
+        public void Init(List<PlayerNetworkData> players, string localPlayerId)
         {
             for (var i = playerTeamViews.Count; i < players.Count; i++)
             {
@@ -35,13 +39,16 @@ namespace _Project.Scripts.UI.ChoosingTeamPanel
             for (var i = 0; i < players.Count; i++)
             {
                 playerTeamViews[i].gameObject.SetActive(true);
-                playerTeamViews[i].Init(players[i].Name, localPlayerId == players[i].ID);
+                playerTeamViews[i].Init(players[i].Name.ToString(), localPlayerId == players[i].PlayerId);
             }
             
             for (var i = players.Count; i < playerTeamViews.Count; i++)
             {
                 playerTeamViews[i].gameObject.SetActive(false);
             }
+
+            chooseTeamButton.gameObject.SetActive(players.Count < 2);
+            
         }
         
         private void ChooseTeamCallBack()
