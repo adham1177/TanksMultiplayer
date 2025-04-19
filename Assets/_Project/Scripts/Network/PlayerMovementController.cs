@@ -1,3 +1,4 @@
+using Cinemachine;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -6,92 +7,120 @@ namespace _Project.Scripts.Network
     public class PlayerMovementController : NetworkBehaviour
     {
         [SerializeField] private float moveSpeed = 5f;
-        [SerializeField] private float rotationSpeed = 720f;
+        [SerializeField] private float rotationSpeed = 100f;
+        [SerializeField] private Transform cameraFollowTarget;
 
-        private Vector3 _inputDirection;
-        private Quaternion _inputRotation;
+        private float _inputForward;
+        private float _inputTurn;
         private NetworkPlayer _player;
 
-        // Server authoritative position/rotation
         private NetworkVariable<Vector3> serverPosition = new(writePerm: NetworkVariableWritePermission.Server);
         private NetworkVariable<Quaternion> serverRotation = new(writePerm: NetworkVariableWritePermission.Server);
+
+        private Vector3 interpolationVelocity;
+        private const float correctionThreshold = 0.5f;
 
         private void Awake()
         {
             _player = GetComponent<NetworkPlayer>();
         }
 
+        public override void OnNetworkSpawn()
+        {
+            if (IsOwner)
+            {
+                var virtualCam = FindObjectOfType<CinemachineVirtualCamera>();
+                if (virtualCam != null)
+                {
+                    virtualCam.Follow = cameraFollowTarget;
+                    virtualCam.LookAt = cameraFollowTarget;
+                }
+            }
+        }
+
+        public void InitializePosition(Vector3 position, Quaternion rotation)
+        {
+            transform.position = position;
+            transform.rotation = rotation;
+            serverPosition.Value = position;
+            serverRotation.Value = rotation;
+        }
+
         private void Update()
         {
             if (IsOwner)
             {
-                HandleInput();
-                PredictMovement();
-                SubmitMoveServerRpc(_inputDirection, _inputRotation);
+                HandleInput(); // Input is still best in Update
             }
-            else
+
+            // Visual-only interpolation for non-owners
+            if (!IsOwner && IsClient)
             {
                 InterpolateToServerState();
             }
         }
 
+        private void FixedUpdate()
+        {
+            if (IsOwner)
+            {
+                PredictMovement(); // Local prediction
+                SubmitMoveServerRpc(_inputForward, _inputTurn); // Send input to server
+
+                float positionError = Vector3.Distance(transform.position, serverPosition.Value);
+                float rotationError = Quaternion.Angle(transform.rotation, serverRotation.Value);
+
+                if (positionError > correctionThreshold || rotationError > 1f) // 2 degrees threshold
+                {
+                    transform.position = Vector3.Lerp(transform.position, serverPosition.Value, 0.1f);
+                    transform.rotation = Quaternion.Slerp(transform.rotation, serverRotation.Value, 0.1f);
+                }
+            }
+            else if (IsServer) // Server moves authoritative version
+            {
+                // Movement already applied via RPC
+                // But server also updates authoritative position/rotation
+                serverPosition.Value = transform.position;
+                serverRotation.Value = transform.rotation;
+            }
+        }
+
         private void HandleInput()
         {
-            _inputDirection = new Vector3(Input.GetAxis("Horizontal"), 0, Input.GetAxis("Vertical")).normalized;
-            _inputRotation = transform.rotation;
-
-            if (_inputDirection != Vector3.zero)
-            {
-                _inputRotation = Quaternion.LookRotation(_inputDirection);
-            }
+            _inputForward = Input.GetAxis("Vertical");
+            _inputTurn = Input.GetAxis("Horizontal");
         }
 
         private void PredictMovement()
         {
-            // Local prediction — immediate feedback
-            transform.position += _inputDirection * (moveSpeed * Time.fixedDeltaTime);
-            transform.rotation = Quaternion.RotateTowards(
-                transform.rotation,
-                _inputRotation,
-                rotationSpeed * Time.fixedDeltaTime
-            );
+            float moveAmount = _inputForward * moveSpeed * Time.fixedDeltaTime;
+            float turnAmount = _inputTurn * rotationSpeed * Time.fixedDeltaTime;
+
+            transform.Rotate(0f, turnAmount, 0f);
+            transform.Translate(Vector3.forward * moveAmount);
         }
 
         private void InterpolateToServerState()
         {
-            // Smoothly interpolate to server state (for non-owners)
-            transform.position = Vector3.Lerp(
-                transform.position,
-                serverPosition.Value,
-                Time.deltaTime * 15f
-            );
-
-            transform.rotation = Quaternion.Slerp(
-                transform.rotation,
-                serverRotation.Value,
-                Time.deltaTime * 15f
-            );
+            transform.position = Vector3.SmoothDamp(transform.position, serverPosition.Value, ref interpolationVelocity, 0.05f);
+            transform.rotation = Quaternion.Slerp(transform.rotation, serverRotation.Value, Time.deltaTime * 10f);
         }
 
         [ServerRpc(RequireOwnership = false)]
-        private void SubmitMoveServerRpc(Vector3 direction, Quaternion lookRotation, ServerRpcParams rpcParams = default)
+        private void SubmitMoveServerRpc(float inputForward, float inputTurn, ServerRpcParams rpcParams = default)
         {
-            // Validate ownership to prevent cheating
             if (rpcParams.Receive.SenderClientId != OwnerClientId)
                 return;
 
-            // Move and rotate the player on the server
-            transform.position += direction * (moveSpeed * Time.fixedDeltaTime);
-            transform.rotation = Quaternion.RotateTowards(
-                transform.rotation,
-                lookRotation,
-                rotationSpeed * Time.fixedDeltaTime
-            );
+            float moveAmount = inputForward * moveSpeed * Time.fixedDeltaTime;
+            float turnAmount = inputTurn * rotationSpeed * Time.fixedDeltaTime;
 
-            // Update authoritative server state
+            transform.Rotate(0f, turnAmount, 0f);
+            transform.Translate(Vector3.forward * moveAmount);
+
+            // Update authoritative position
             serverPosition.Value = transform.position;
             serverRotation.Value = transform.rotation;
-            
         }
     }
 }

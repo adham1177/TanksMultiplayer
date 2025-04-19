@@ -89,7 +89,7 @@ namespace _Project.Scripts.Network
         private void CheckForTeamsCompleteness()
         {
             Debug.Log("Checking For Teams");
-            if (_teams[0].Count == 1 && _teams[1].Count == 1)
+            if (_teams[0].Count == 2 && _teams[1].Count == 2)
             {
                 teamsReadyEvent?.Raise(_teams);
             }
