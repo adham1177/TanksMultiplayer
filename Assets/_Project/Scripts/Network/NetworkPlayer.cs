@@ -1,3 +1,4 @@
+using System;
 using _Project.Scripts.Shared;
 using _Project.Scripts.Shared.Gameplay.Events;
 using Unity.Netcode;
@@ -31,6 +32,8 @@ namespace _Project.Scripts.Network
 
         [Header("Events")] 
         [SerializeField] private PlayerKilledEvent playerKilledEvent;
+
+        public static event Action<int> PlayerKilled; 
 
         private const float MaxHealth = 100;
         
@@ -103,6 +106,7 @@ namespace _Project.Scripts.Network
                 _lastKillerId.Value = attackerId;
                 isDead.Value = true;
                 RaisePlayerKilledEvent();
+                PlayerKilled?.Invoke(teamId.Value);
             }
         }
         
