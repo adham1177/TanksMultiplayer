@@ -17,9 +17,9 @@ namespace _Project.Scripts.Boot
             Time.fixedDeltaTime = 1f / 60f;
             try
             {
-                await UnityServices.InitializeAsync(); // Initialize Unity Gaming Services SDKs.
-                AuthenticationService.Instance.SwitchProfile($"a{UnityEngine.Random.Range(1, 10)}");
-                await AuthenticationService.Instance.SignInAnonymouslyAsync(); // Anonymously authenticate the player
+                await UnityServices.InitializeAsync();
+                AuthenticationService.Instance.SwitchProfile($"Player{UnityEngine.Random.Range(1, 1000)}");
+                await AuthenticationService.Instance.SignInAnonymouslyAsync();
                 Debug.Log($"Sign in anonymously succeeded! PlayerID: {AuthenticationService.Instance.PlayerId}");
                 SceneManager.LoadScene("HomeScene");
             }

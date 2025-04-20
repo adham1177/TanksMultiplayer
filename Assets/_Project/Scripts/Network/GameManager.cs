@@ -123,8 +123,6 @@ namespace _Project.Scripts.Network
         [ClientRpc]
         private void NotifyGameOverClientRpc(string winnerTeamName)
         {
-            SessionManager.instance.LeaveLobby().GetAwaiter();
-            NetworkManager.Singleton.Shutdown();
             matchEndEvent?.Raise(winnerTeamName);
         }
         

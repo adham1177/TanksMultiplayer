@@ -1,4 +1,5 @@
 using System;
+using _Project.Scripts.Network;
 using _Project.Scripts.Shared.Gameplay.Events;
 using TMPro;
 using UnityEngine;
@@ -36,7 +37,7 @@ namespace _Project.Scripts.UI
         
         private void RestartButtonCallback()
         {
-            SceneManager.LoadScene("HomeScene");
+            SessionManager.instance.DisconnectPlayersAndSwitchToScene();
         }
 
         private void OnEndGame(string winnerTeamName)

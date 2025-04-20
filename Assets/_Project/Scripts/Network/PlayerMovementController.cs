@@ -14,11 +14,11 @@ namespace _Project.Scripts.Network
         private float _inputTurn;
         private NetworkPlayer _player;
 
-        private NetworkVariable<Vector3> serverPosition = new(writePerm: NetworkVariableWritePermission.Server);
-        private NetworkVariable<Quaternion> serverRotation = new(writePerm: NetworkVariableWritePermission.Server);
+        private readonly NetworkVariable<Vector3> _serverPosition = new(writePerm: NetworkVariableWritePermission.Server);
+        private readonly NetworkVariable<Quaternion> _serverRotation = new(writePerm: NetworkVariableWritePermission.Server);
 
-        private Vector3 interpolationVelocity;
-        private const float correctionThreshold = 0.5f;
+        private Vector3 _interpolationVelocity;
+        private const float CorrectionThreshold = 0.5f;
 
         private void Awake()
         {
@@ -27,33 +27,31 @@ namespace _Project.Scripts.Network
 
         public override void OnNetworkSpawn()
         {
-            if (IsOwner)
-            {
-                var virtualCam = FindObjectOfType<CinemachineVirtualCamera>();
-                if (virtualCam != null)
-                {
-                    virtualCam.Follow = cameraFollowTarget;
-                    virtualCam.LookAt = cameraFollowTarget;
-                }
-            }
+            if (!IsOwner) 
+                return;
+            
+            var virtualCam = FindObjectOfType<CinemachineVirtualCamera>();
+            if (virtualCam == null) 
+                return;
+            virtualCam.Follow = cameraFollowTarget;
+            virtualCam.LookAt = cameraFollowTarget;
         }
 
         public void InitializePosition(Vector3 position, Quaternion rotation)
         {
             transform.position = position;
             transform.rotation = rotation;
-            serverPosition.Value = position;
-            serverRotation.Value = rotation;
+            _serverPosition.Value = position;
+            _serverRotation.Value = rotation;
         }
 
         private void Update()
         {
             if (IsOwner)
             {
-                HandleInput(); // Input is still best in Update
+                HandleInput();
             }
-
-            // Visual-only interpolation for non-owners
+            
             if (!IsOwner && IsClient)
             {
                 InterpolateToServerState();
@@ -64,24 +62,21 @@ namespace _Project.Scripts.Network
         {
             if (IsOwner)
             {
-                PredictMovement(); // Local prediction
-                SubmitMoveServerRpc(_inputForward, _inputTurn); // Send input to server
+                PredictMovement();
+                SubmitMoveServerRpc(_inputForward, _inputTurn);
 
-                float positionError = Vector3.Distance(transform.position, serverPosition.Value);
-                float rotationError = Quaternion.Angle(transform.rotation, serverRotation.Value);
+                var positionError = Vector3.Distance(transform.position, _serverPosition.Value);
+                var rotationError = Quaternion.Angle(transform.rotation, _serverRotation.Value);
 
-                if (positionError > correctionThreshold || rotationError > 1f) // 2 degrees threshold
-                {
-                    transform.position = Vector3.Lerp(transform.position, serverPosition.Value, 0.1f);
-                    transform.rotation = Quaternion.Slerp(transform.rotation, serverRotation.Value, 0.1f);
-                }
+                if (!(positionError > CorrectionThreshold) && !(rotationError > 1f)) 
+                    return; 
+                transform.position = Vector3.Lerp(transform.position, _serverPosition.Value, 0.2f);
+                transform.rotation = Quaternion.Slerp(transform.rotation, _serverRotation.Value, 0.2f);
             }
-            else if (IsServer) // Server moves authoritative version
+            else if (IsServer)
             {
-                // Movement already applied via RPC
-                // But server also updates authoritative position/rotation
-                serverPosition.Value = transform.position;
-                serverRotation.Value = transform.rotation;
+                _serverPosition.Value = transform.position;
+                _serverRotation.Value = transform.rotation;
             }
         }
 
@@ -93,8 +88,8 @@ namespace _Project.Scripts.Network
 
         private void PredictMovement()
         {
-            float moveAmount = _inputForward * moveSpeed * Time.fixedDeltaTime;
-            float turnAmount = _inputTurn * rotationSpeed * Time.fixedDeltaTime;
+            var moveAmount = _inputForward * moveSpeed * Time.fixedDeltaTime;
+            var turnAmount = _inputTurn * rotationSpeed * Time.fixedDeltaTime;
 
             transform.Rotate(0f, turnAmount, 0f);
             transform.Translate(Vector3.forward * moveAmount);
@@ -102,8 +97,8 @@ namespace _Project.Scripts.Network
 
         private void InterpolateToServerState()
         {
-            transform.position = Vector3.SmoothDamp(transform.position, serverPosition.Value, ref interpolationVelocity, 0.05f);
-            transform.rotation = Quaternion.Slerp(transform.rotation, serverRotation.Value, Time.deltaTime * 10f);
+            transform.position = Vector3.SmoothDamp(transform.position, _serverPosition.Value, ref _interpolationVelocity, 0.05f);
+            transform.rotation = Quaternion.Slerp(transform.rotation, _serverRotation.Value, Time.deltaTime * 10f);
         }
 
         [ServerRpc(RequireOwnership = false)]
@@ -112,15 +107,13 @@ namespace _Project.Scripts.Network
             if (rpcParams.Receive.SenderClientId != OwnerClientId)
                 return;
 
-            float moveAmount = inputForward * moveSpeed * Time.fixedDeltaTime;
-            float turnAmount = inputTurn * rotationSpeed * Time.fixedDeltaTime;
+            var moveAmount = inputForward * moveSpeed * Time.fixedDeltaTime;
+            var turnAmount = inputTurn * rotationSpeed * Time.fixedDeltaTime;
 
             transform.Rotate(0f, turnAmount, 0f);
             transform.Translate(Vector3.forward * moveAmount);
-
-            // Update authoritative position
-            serverPosition.Value = transform.position;
-            serverRotation.Value = transform.rotation;
+            _serverPosition.Value = transform.position;
+            _serverRotation.Value = transform.rotation;
         }
     }
 }
