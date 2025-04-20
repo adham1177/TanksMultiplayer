@@ -2,118 +2,58 @@ using Cinemachine;
 using Unity.Netcode;
 using UnityEngine;
 
-namespace _Project.Scripts.Network
-{
-    public class PlayerMovementController : NetworkBehaviour
-    {
-        [SerializeField] private float moveSpeed = 5f;
-        [SerializeField] private float rotationSpeed = 100f;
-        [SerializeField] private Transform cameraFollowTarget;
+namespace _Project.Scripts.Network {
+    public class PlayerMovementController : NetworkBehaviour {
+        [Header("Movement Settings")]
+        public float moveSpeed = 5f;
+        public float turnSpeed = 100f;
+        public bool enableClientPrediction = true;
 
-        private float _inputForward;
-        private float _inputTurn;
-        private NetworkPlayer _player;
+        private Vector2 input;
 
-        private readonly NetworkVariable<Vector3> _serverPosition = new(writePerm: NetworkVariableWritePermission.Server);
-        private readonly NetworkVariable<Quaternion> _serverRotation = new(writePerm: NetworkVariableWritePermission.Server);
+        void Update() {
+            if (!IsOwner) return;
 
-        private Vector3 _interpolationVelocity;
-        private const float CorrectionThreshold = 0.5f;
+            input = new Vector2(Input.GetAxis("Horizontal"), Input.GetAxis("Vertical"));
 
-        private void Awake()
-        {
-            _player = GetComponent<NetworkPlayer>();
+            if (enableClientPrediction) {
+                ApplyMovement(input);
+            }
+
+            SendInputToServerRpc(input);
         }
 
         public override void OnNetworkSpawn()
         {
-            if (!IsOwner) 
+            if (!IsOwner)
                 return;
-            
             var virtualCam = FindObjectOfType<CinemachineVirtualCamera>();
             if (virtualCam == null) 
                 return;
-            virtualCam.Follow = cameraFollowTarget;
-            virtualCam.LookAt = cameraFollowTarget;
+            virtualCam.Follow = transform;
+            virtualCam.LookAt = transform;
         }
 
-        public void InitializePosition(Vector3 position, Quaternion rotation)
-        {
-            transform.position = position;
-            transform.rotation = rotation;
-            _serverPosition.Value = position;
-            _serverRotation.Value = rotation;
+        [ServerRpc]
+        private void SendInputToServerRpc(Vector2 moveInput) {
+            ApplyMovement(moveInput);
+            BroadcastStateClientRpc(transform.position, transform.rotation);
         }
 
-        private void Update()
-        {
-            if (IsOwner)
-            {
-                HandleInput();
-            }
-            
-            if (!IsOwner && IsClient)
-            {
-                InterpolateToServerState();
-            }
+        private void ApplyMovement(Vector2 moveInput) {
+            float move = moveInput.y * moveSpeed * Time.fixedDeltaTime;
+            float turn = moveInput.x * turnSpeed * Time.fixedDeltaTime;
+
+            transform.position += transform.forward * move;
+            transform.Rotate(Vector3.up * turn);
         }
 
-        private void FixedUpdate()
-        {
-            if (IsOwner)
-            {
-                PredictMovement();
-                SubmitMoveServerRpc(_inputForward, _inputTurn);
+        [ClientRpc]
+        private void BroadcastStateClientRpc(Vector3 newPosition, Quaternion newRotation) {
+            if (IsOwner && enableClientPrediction) return; // Don't overwrite predicted movement
 
-                var positionError = Vector3.Distance(transform.position, _serverPosition.Value);
-                var rotationError = Quaternion.Angle(transform.rotation, _serverRotation.Value);
-
-                if (!(positionError > CorrectionThreshold) && !(rotationError > 1f)) 
-                    return; 
-                transform.position = Vector3.Lerp(transform.position, _serverPosition.Value, 0.2f);
-                transform.rotation = Quaternion.Slerp(transform.rotation, _serverRotation.Value, 0.2f);
-            }
-            else if (IsServer)
-            {
-                _serverPosition.Value = transform.position;
-                _serverRotation.Value = transform.rotation;
-            }
-        }
-
-        private void HandleInput()
-        {
-            _inputForward = Input.GetAxis("Vertical");
-            _inputTurn = Input.GetAxis("Horizontal");
-        }
-
-        private void PredictMovement()
-        {
-            var moveAmount = _inputForward * moveSpeed * Time.fixedDeltaTime;
-            var turnAmount = _inputTurn * rotationSpeed * Time.fixedDeltaTime;
-
-            transform.Rotate(0f, turnAmount, 0f);
-            transform.Translate(Vector3.forward * moveAmount);
-        }
-
-        private void InterpolateToServerState()
-        {
-            transform.position = Vector3.SmoothDamp(transform.position, _serverPosition.Value, ref _interpolationVelocity, 0.05f);
-            transform.rotation = Quaternion.Slerp(transform.rotation, _serverRotation.Value, Time.deltaTime * 10f);
-        }
-
-        [ServerRpc(RequireOwnership = false)]
-        private void SubmitMoveServerRpc(float inputForward, float inputTurn, ServerRpcParams rpcParams = default)
-        {
-            if (rpcParams.Receive.SenderClientId != OwnerClientId)
-                return;
-
-            var moveAmount = inputForward * moveSpeed * Time.fixedDeltaTime;
-            var turnAmount = inputTurn * rotationSpeed * Time.fixedDeltaTime;
-
-            transform.Rotate(0f, turnAmount, 0f);
-            transform.Translate(Vector3.forward * moveAmount);
-            _serverPosition.Value = transform.position;
-            _serverRotation.Value = transform.rotation;
+            transform.position = newPosition;
+            transform.rotation = newRotation;
         }
     }
 }

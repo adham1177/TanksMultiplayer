@@ -83,7 +83,7 @@ namespace _Project.Scripts.Network
                 networkPlayer.ServerInitialize(player);
 
                 var movementController = playerNetworkObject.GetComponent<PlayerMovementController>();
-                movementController.InitializePosition(initialTransform.position, initialTransform.rotation);
+                // movementController.InitializePosition(initialTransform.position, initialTransform.rotation);
                 teamList.Add(networkPlayer);
             }
         }
