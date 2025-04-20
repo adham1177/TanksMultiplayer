@@ -41,7 +41,7 @@ namespace _Project.Scripts.UI.SessionsPanel
 
         private void Start()
         {
-            RefreshButtonCallback();
+            InvokeRepeating(nameof(RefreshButtonCallback),0f,2f);
         }
 
         private void TryJoinSession(string sessionName)

@@ -4,6 +4,7 @@ using Unity.Services.Authentication;
 using Unity.Services.Core;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using Random = System.Random;
 
 namespace _Project.Scripts.Boot
 {
@@ -11,11 +12,15 @@ namespace _Project.Scripts.Boot
     {
         private async void Start()
         {
+            
+            Application.targetFrameRate = 60;
+            Time.fixedDeltaTime = 1f / 60f;
+            Screen.SetResolution(960, 450, false);
             try
             {
-                await UnityServices.InitializeAsync(); // Initialize Unity Gaming Services SDKs.
-                AuthenticationService.Instance.SwitchProfile("aa");
-                await AuthenticationService.Instance.SignInAnonymouslyAsync(); // Anonymously authenticate the player
+                await UnityServices.InitializeAsync();
+                AuthenticationService.Instance.SwitchProfile($"Player{UnityEngine.Random.Range(1, 1000)}");
+                await AuthenticationService.Instance.SignInAnonymouslyAsync();
                 Debug.Log($"Sign in anonymously succeeded! PlayerID: {AuthenticationService.Instance.PlayerId}");
                 SceneManager.LoadScene("HomeScene");
             }
